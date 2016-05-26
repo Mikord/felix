@@ -28,7 +28,7 @@
  <modelVersion>4.0.0</modelVersion>
 
  <artifactId>maven-bundle-plugin</artifactId>
- <version>3.0.1</version>
+ <version>3.0.1.cg-1</version>
  <packaging>maven-plugin</packaging>
 
  <name>Maven Bundle Plugin</name>
