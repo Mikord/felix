@@ -178,7 +178,7 @@ public final class DependencyEmbedder extends AbstractDependencyFilter
             targetFileName.append( dependency.getArtifactId() );
             if ( false == Boolean.valueOf( m_embedStripVersion ).booleanValue() )
             {
-                targetFileName.append( '-' ).append( dependency.getVersion() );
+                targetFileName.append( '-' ).append( dependency.getBaseVersion() );
                 if ( StringUtils.isNotEmpty( dependency.getClassifier() ) )
                 {
                     targetFileName.append( '-' ).append( dependency.getClassifier() );
