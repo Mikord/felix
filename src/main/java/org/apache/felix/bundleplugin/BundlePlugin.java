@@ -90,6 +90,7 @@ import org.codehaus.plexus.util.FileUtils;
 import org.codehaus.plexus.util.PropertyUtils;
 import org.codehaus.plexus.util.StringUtils;
 import org.codehaus.plexus.util.WriterFactory;
+import org.sonatype.plexus.build.incremental.BuildContext;
 
 import aQute.bnd.header.Attrs;
 import aQute.bnd.header.OSGiHeader;
@@ -189,6 +190,18 @@ public class BundlePlugin extends AbstractMojo
     @Parameter( defaultValue = "${basedir}/dependency-reduced-pom.xml" )
     protected File dependencyReducedPomLocation;
 
+    /**
+     * Directory where the SCR files will be written
+     */
+    @Parameter(defaultValue="${project.build.outputDirectory}")
+    protected File scrLocation;
+
+    /**
+     * When true, dump the generated SCR files
+     */
+    @Parameter
+    protected boolean exportScr;
+    
     @Component
     private MavenProjectHelper m_projectHelper;
 
@@ -232,11 +245,8 @@ public class BundlePlugin extends AbstractMojo
 
     /**
      * Artifact resolver, needed to download source jars for inclusion in classpath.
-     *
-     * @component
-     * @required
-     * @readonly
      */
+    @Component
     protected ArtifactResolver artifactResolver;
 
 
@@ -276,10 +286,13 @@ public class BundlePlugin extends AbstractMojo
      * The Maven project.
      */
     @Parameter( defaultValue = "${project}", readonly = true, required = true )
-    private MavenProject project;
+    protected MavenProject project;
 
     /**
      * The BND instructions for the bundle.
+     * Maven will expand property macros in these values. If you want to use a BND macro, you must double the dollar sign
+     * for the plugin to pass it to BND correctly. For example: <br>
+     * {@code <_consumer-policy>$${range;[===,+)}<code>}<code>{@code </_consumer-policy> }
      */
     @Parameter
     private Map<String, String> instructions = new LinkedHashMap<String, String>();
@@ -298,6 +311,9 @@ public class BundlePlugin extends AbstractMojo
     @Parameter( defaultValue = "${session}", readonly = true, required = true )
     private MavenSession m_mavenSession;
 
+    @Component
+    protected BuildContext buildContext;
+    
     private static final String MAVEN_SYMBOLICNAME = "maven-symbolicname";
     private static final String MAVEN_RESOURCES = "{maven-resources}";
     private static final String MAVEN_TEST_RESOURCES = "{maven-test-resources}";
@@ -504,7 +520,7 @@ public class BundlePlugin extends AbstractMojo
 
                 try
                 {
-                    ManifestPlugin.writeManifest( builder, outputFile, niceManifest );
+                    ManifestPlugin.writeManifest( builder, outputFile, niceManifest, exportScr, scrLocation, buildContext, getLog() );
                 }
                 catch ( IOException e )
                 {
@@ -1169,7 +1185,10 @@ public class BundlePlugin extends AbstractMojo
             {
                 Set optionalPackages = getOptionalPackages( currentProject, dependencyGraph );
 
-                Map<String, ? extends Map<String, String>> values = new Analyzer().parseHeader( importPackages );
+                Map<String, ? extends Map<String, String>> values;
+                try (Analyzer analyzer = new Analyzer()) {
+                    values = analyzer.parseHeader( importPackages );
+                }
                 for ( Map.Entry<String, ? extends Map<String, String>> entry : values.entrySet() )
                 {
                     String pkg = entry.getKey();
@@ -1819,7 +1838,8 @@ public class BundlePlugin extends AbstractMojo
 
         // Add default plugins
         header( properties, Analyzer.PLUGIN, BlueprintPlugin.class.getName() + ","
-                                           + SpringXMLType.class.getName() );
+                                           + SpringXMLType.class.getName() + ","
+                                           + JpaPlugin.class.getName() );
 
         return properties;
     }
