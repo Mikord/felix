@@ -22,34 +22,37 @@ package org.apache.felix.bundleplugin;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.jar.Manifest;
 
-import aQute.bnd.header.Parameters;
-import aQute.bnd.osgi.Instructions;
-import aQute.bnd.osgi.Processor;
-import aQute.lib.collections.ExtList;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
+import org.apache.maven.plugin.logging.Log;
+import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.apache.maven.shared.dependency.graph.DependencyNode;
+import org.codehaus.plexus.util.Scanner;
+import org.osgi.service.metatype.MetaTypeService;
+import org.sonatype.plexus.build.incremental.BuildContext;
 
 import aQute.bnd.osgi.Analyzer;
 import aQute.bnd.osgi.Builder;
+import aQute.bnd.osgi.Instructions;
 import aQute.bnd.osgi.Jar;
 import aQute.bnd.osgi.Resource;
-import org.apache.maven.shared.dependency.graph.DependencyNode;
+import aQute.lib.collections.ExtList;
 
 
 /**
@@ -67,22 +70,28 @@ public class ManifestPlugin extends BundlePlugin
     protected boolean rebuildBundle;
 
     /**
-     * Directory where the SCR files will be written
-     *
-     * @parameter expression="${scrLocation}" default-value="${project.build.outputDirectory}"
+     * When true, manifest generation on incremental builds is supported in IDEs like Eclipse.
+     * Please note that the underlying BND library does not support incremental build, which means
+     * always the whole manifest and SCR metadata is generated.
      */
-    protected File scrLocation;
+    @Parameter( property = "supportIncrementalBuild" )
+    private boolean supportIncrementalBuild;
 
-    /**
-     * When true, dump the generated SCR files
-     * @parameter
-     */
-    protected boolean exportScr;
+    @Component
+    private BuildContext buildContext;
 
     @Override
     protected void execute( MavenProject project, DependencyNode dependencyGraph, Map<String, String> instructions, Properties properties, Jar[] classpath )
         throws MojoExecutionException
     {
+
+        // in incremental build execute manifest generation only when explicitly activated
+        // and when any java file was touched since last build
+        if (buildContext.isIncremental() && !(supportIncrementalBuild && anyJavaSourceFileTouchedSinceLastBuild())) {
+            getLog().debug("Skipping manifest generation because no java source file was added, updated or removed since last build.");
+            return;
+        }
+
         Analyzer analyzer;
         try
         {
@@ -112,7 +121,7 @@ public class ManifestPlugin extends BundlePlugin
 
         try
         {
-            writeManifest( analyzer, outputFile, niceManifest );
+            writeManifest( analyzer, outputFile, niceManifest, exportScr, scrLocation, buildContext, getLog() );
         }
         catch ( Exception e )
         {
@@ -120,7 +129,7 @@ public class ManifestPlugin extends BundlePlugin
         }
         finally
         {
-            try 
+            try
             {
                 analyzer.close();
             }
@@ -131,16 +140,38 @@ public class ManifestPlugin extends BundlePlugin
         }
     }
 
+    /**
+     * Checks if any *.java file was added, updated or removed since last build in any source directory.
+     */
+    private boolean anyJavaSourceFileTouchedSinceLastBuild() {
+        @SuppressWarnings("unchecked")
+        List<String> sourceDirectories = project.getCompileSourceRoots();
+        for (String sourceDirectory : sourceDirectories) {
+            File directory = new File(sourceDirectory);
+            Scanner scanner = buildContext.newScanner(directory);
+            Scanner deleteScanner = buildContext.newDeleteScanner(directory);
+            if (containsJavaFile(scanner) || containsJavaFile(deleteScanner)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    private boolean containsJavaFile(Scanner scanner) {
+        String[] includes = new String[] { "**/*.java" };
+        scanner.setIncludes(includes);
+        scanner.scan();
+        return scanner.getIncludedFiles().length > 0;
+    }
 
     public Manifest getManifest( MavenProject project, DependencyNode dependencyGraph, Jar[] classpath ) throws IOException, MojoFailureException,
         MojoExecutionException, Exception
     {
-        return getManifest( project, dependencyGraph, new LinkedHashMap<String, String>(), new Properties(), classpath );
+        return getManifest( project, dependencyGraph, new LinkedHashMap<String, String>(), new Properties(), classpath, buildContext );
     }
 
 
-    public Manifest getManifest( MavenProject project, DependencyNode dependencyGraph, Map<String, String> instructions, Properties properties, Jar[] classpath )
-        throws IOException, MojoFailureException, MojoExecutionException, Exception
+    public Manifest getManifest( MavenProject project, DependencyNode dependencyGraph, Map<String, String> instructions, Properties properties, Jar[] classpath,
+            BuildContext buildContext) throws IOException, MojoFailureException, MojoExecutionException, Exception
     {
         Analyzer analyzer = getAnalyzer(project, dependencyGraph, instructions, properties, classpath);
 
@@ -149,32 +180,7 @@ public class ManifestPlugin extends BundlePlugin
 
         if (exportScr)
         {
-            scrLocation.mkdirs();
-
-            String bpHeader = analyzer.getProperty(Analyzer.SERVICE_COMPONENT);
-            Parameters map = Processor.parseHeader(bpHeader, null);
-            for (String root : map.keySet())
-            {
-                Map<String, Resource> dir = jar.getDirectories().get(root);
-                File location = new File(scrLocation, root);
-                if (dir == null || dir.isEmpty())
-                {
-                    Resource resource = jar.getResource(root);
-                    if (resource != null)
-                    {
-                        writeSCR(resource, location);
-                    }
-                }
-                else
-                {
-                    for (Map.Entry<String, Resource> entry : dir.entrySet())
-                    {
-                        String path = entry.getKey();
-                        Resource resource = entry.getValue();
-                        writeSCR(resource, new File(location, path));
-                    }
-                }
-            }
+            exportScr(analyzer, jar, scrLocation, buildContext, getLog() );
         }
 
         // cleanup...
@@ -183,10 +189,39 @@ public class ManifestPlugin extends BundlePlugin
         return manifest;
     }
 
-    protected void writeSCR(Resource resource, File destination) throws Exception
+    private static void exportScr(Analyzer analyzer, Jar jar, File scrLocation, BuildContext buildContext, Log log ) throws Exception {
+        log.debug("Export SCR metadata to: " + scrLocation.getPath());
+        scrLocation.mkdirs();
+
+     // export SCR metadata files from OSGI-INF/
+        Map<String, Resource> scrDir = jar.getDirectories().get("OSGI-INF");
+        if (scrDir != null) {
+            for (Map.Entry<String, Resource> entry : scrDir.entrySet()) {
+                String path = entry.getKey();
+                Resource resource = entry.getValue();
+                writeSCR(resource, new File(scrLocation, path), buildContext,
+                        log);
+            }
+        }
+
+        // export metatype files from OSGI-INF/metatype
+        Map<String,Resource> metatypeDir = jar.getDirectories().get(MetaTypeService.METATYPE_DOCUMENTS_LOCATION);
+        if (metatypeDir != null) {
+            for (Map.Entry<String, Resource> entry : metatypeDir.entrySet())
+            {
+                String path = entry.getKey();
+                Resource resource = entry.getValue();
+                writeSCR(resource, new File(scrLocation, path), buildContext, log);
+            }
+        }
+
+    }
+
+    private static void writeSCR(Resource resource, File destination, BuildContext buildContext, Log log ) throws Exception
     {
+        log.debug("Write SCR file: " + destination.getPath());
         destination.getParentFile().mkdirs();
-        OutputStream os = new FileOutputStream(destination);
+        OutputStream os = buildContext.newFileOutputStream(destination);
         try
         {
             resource.write(os);
@@ -284,7 +319,7 @@ public class ManifestPlugin extends BundlePlugin
                 if ( !entryFile.exists() || entry.getValue().lastModified() == 0 )
                 {
                     entryFile.getParentFile().mkdirs();
-                    OutputStream os = new FileOutputStream( entryFile );
+                    OutputStream os = buildContext.newFileOutputStream( entryFile );
                     entry.getValue().write( os );
                     os.close();
                 }
@@ -295,10 +330,12 @@ public class ManifestPlugin extends BundlePlugin
     }
 
 
-    public static void writeManifest( Analyzer analyzer, File outputFile, boolean niceManifest ) throws Exception
+    public static void writeManifest( Analyzer analyzer, File outputFile, boolean niceManifest,
+            boolean exportScr, File scrLocation, BuildContext buildContext, Log log ) throws Exception
     {
         Properties properties = analyzer.getProperties();
-        Manifest manifest = analyzer.getJar().getManifest();
+        Jar jar = analyzer.getJar();
+        Manifest manifest = jar.getManifest();
         if ( outputFile.exists() && properties.containsKey( "Merge-Headers" ) )
         {
             Manifest analyzerManifest = manifest;
@@ -320,16 +357,22 @@ public class ManifestPlugin extends BundlePlugin
             File parentFile = outputFile.getParentFile();
             parentFile.mkdirs();
         }
-        writeManifest( manifest, outputFile, niceManifest );
+        writeManifest( manifest, outputFile, niceManifest, buildContext, log );
+
+        if (exportScr)
+        {
+            exportScr(analyzer, jar, scrLocation, buildContext, log);
+        }
     }
 
 
-    public static void writeManifest( Manifest manifest, File outputFile, boolean niceManifest ) throws IOException
+    public static void writeManifest( Manifest manifest, File outputFile, boolean niceManifest,
+            BuildContext buildContext, Log log ) throws IOException
     {
+        log.debug("Write manifest to " + outputFile.getPath());
         outputFile.getParentFile().mkdirs();
 
-        FileOutputStream os;
-        os = new FileOutputStream( outputFile );
+        OutputStream os = buildContext.newFileOutputStream( outputFile );
         try
         {
             ManifestWriter.outputManifest( manifest, os, niceManifest );
