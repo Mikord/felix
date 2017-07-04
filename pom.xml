@@ -45,24 +45,6 @@
      <url>http://svn.apache.org/viewvc/felix/releases/maven-bundle-plugin-3.3.0</url>
  </scm>
 
-  <distributionManagement>
-    <repository>
-      <id>central</id>
-      <name>ASD CG Release repository</name>
-      <url>http://artifactory.cg.ru/artifactory/libs-releases-local</url>
-    </repository>
-    <snapshotRepository>
-      <id>snapshots</id>
-      <name>ASD CG Snapshots repository</name>
-      <url>http://artifactory.cg.ru/artifactory/libs-snapshots-local</url>
-    </snapshotRepository>
-    <!-- Support for publishing the mvn site. -->
-    <site>
-      <id>apache.website</id>
-      <url>scm:svn:https://svn.apache.org/repos/infra/websites/production/felix/content/components/${maven.site.path}</url>
-    </site>
-  </distributionManagement>
-
  <properties>
    <felix.java.version>7</felix.java.version>
    <maven.site.path>bundle-plugin-archives/bundle-plugin-LATEST</maven.site.path>
@@ -322,6 +304,35 @@
         </pluginManagement>
       </build>
     </profile>
+
+      <profile>
+        <id>artifactory</id>
+        <activation>
+          <activeByDefault>true</activeByDefault>
+          <property>
+            <name>!skipDefault</name>
+          </property>
+        </activation>
+
+        <distributionManagement>
+          <repository>
+            <id>central</id>
+            <name>ASD CG Release repository</name>
+            <url>http://artifactory.cg.ru/artifactory/libs-releases-local</url>
+          </repository>
+          <snapshotRepository>
+            <id>snapshots</id>
+            <name>ASD CG Snapshots repository</name>
+            <url>http://artifactory.cg.ru/artifactory/libs-snapshots-local</url>
+          </snapshotRepository>
+          <!-- Support for publishing the mvn site. -->
+          <site>
+            <id>apache.website</id>
+            <url>scm:svn:https://svn.apache.org/repos/infra/websites/production/felix/content/components/${maven.site.path}</url>
+          </site>
+        </distributionManagement>
+      </profile>
+
   </profiles>
 
 </project>
