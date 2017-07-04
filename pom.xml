@@ -28,7 +28,7 @@
  <modelVersion>4.0.0</modelVersion>
 
  <artifactId>maven-bundle-plugin</artifactId>
- <version>3.3.0.cg-2</version>
+ <version>3.3.0.cg-3</version>
  <packaging>maven-plugin</packaging>
 
  <name>Maven Bundle Plugin</name>
@@ -44,24 +44,6 @@
      <developerConnection>scm:svn:https://svn.apache.org/repos/asf/felix/releases/maven-bundle-plugin-3.3.0</developerConnection>
      <url>http://svn.apache.org/viewvc/felix/releases/maven-bundle-plugin-3.3.0</url>
  </scm>
-
-  <distributionManagement>
-    <repository>
-      <id>central</id>
-      <name>ASD CG Release repository</name>
-      <url>http://artifactory.cg.ru/artifactory/libs-releases-local</url>
-    </repository>
-    <snapshotRepository>
-      <id>snapshots</id>
-      <name>ASD CG Snapshots repository</name>
-      <url>http://artifactory.cg.ru/artifactory/libs-snapshots-local</url>
-    </snapshotRepository>
-    <!-- Support for publishing the mvn site. -->
-    <site>
-      <id>apache.website</id>
-      <url>scm:svn:https://svn.apache.org/repos/infra/websites/production/felix/content/components/${maven.site.path}</url>
-    </site>
-  </distributionManagement>
 
  <properties>
    <felix.java.version>7</felix.java.version>
@@ -322,6 +304,35 @@
         </pluginManagement>
       </build>
     </profile>
+
+      <profile>
+        <id>artifactory</id>
+        <activation>
+          <activeByDefault>true</activeByDefault>
+          <property>
+            <name>!skipDefault</name>
+          </property>
+        </activation>
+
+        <distributionManagement>
+          <repository>
+            <id>central</id>
+            <name>ASD CG Release repository</name>
+            <url>http://artifactory.cg.ru/artifactory/libs-releases-local</url>
+          </repository>
+          <snapshotRepository>
+            <id>snapshots</id>
+            <name>ASD CG Snapshots repository</name>
+            <url>http://artifactory.cg.ru/artifactory/libs-snapshots-local</url>
+          </snapshotRepository>
+          <!-- Support for publishing the mvn site. -->
+          <site>
+            <id>apache.website</id>
+            <url>scm:svn:https://svn.apache.org/repos/infra/websites/production/felix/content/components/${maven.site.path}</url>
+          </site>
+        </distributionManagement>
+      </profile>
+
   </profiles>
 
 </project>
