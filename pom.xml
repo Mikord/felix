@@ -314,6 +314,14 @@
           </property>
         </activation>
 
+        <repositories>
+          <repository>
+            <id>central</id>
+            <name>central</name>
+            <url>http://artifactory.cg.ru/artifactory/all</url>
+          </repository>
+        </repositories>
+
         <distributionManagement>
           <repository>
             <id>central</id>
