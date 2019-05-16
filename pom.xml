@@ -316,15 +316,15 @@
 
         <repositories>
           <repository>
-            <id>central</id>
-            <name>central</name>
+            <id>mikord</id>
+            <name>mikord</name>
             <url>http://repo.cg.ru/repository/all</url>
           </repository>
         </repositories>
 
         <distributionManagement>
           <repository>
-            <id>central</id>
+            <id>mikord</id>
             <name>ASD CG Release repository</name>
             <url>http://repo.cg.ru/repository/libs-releases-local</url>
           </repository>
