@@ -316,9 +316,14 @@
 
         <repositories>
           <repository>
+            <id>central</id>
+            <name>central</name>
+            <url>http://repo.cg.ru/repository/maven-public</url>
+          </repository>
+          <repository>
             <id>mikord</id>
             <name>mikord</name>
-            <url>http://repo.cg.ru/repository/all</url>
+            <url>http://repo.cg.ru/repository/maven-mikord</url>
           </repository>
         </repositories>
 
